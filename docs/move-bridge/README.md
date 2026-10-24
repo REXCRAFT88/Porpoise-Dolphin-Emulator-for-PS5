@@ -1,3 +1,5 @@
+[Compatibility, untested hardware and known issues](../move-studio/COMPATIBILITY.md)
+
 # Move / Navigation integration handoff
 
 This branch is an experimental, opt-in input integration for Porpoise. It is based on upstream Main commit `db6c13e20a9e4c3e16e088ecb8b3d0098efa73b2`. It does not replace Porpoise's Bluetooth implementation or install the external bridge.

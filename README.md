@@ -1,3 +1,5 @@
+[Developer packages](developer-packages/README.md) | [Compatibility and known issues](docs/move-studio/COMPATIBILITY.md)
+
 Experimental opt-in Move/Nav integration: [developer handoff](docs/move-bridge/README.md). This branch is not a finalized release; see its validation and known limitations.
 
 <p align="center">

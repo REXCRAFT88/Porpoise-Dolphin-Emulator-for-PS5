@@ -1765,6 +1765,13 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
     for (;;)
     {
         const porpoise::pad::State &pad = porpoise::pad::poll();
+        if(porpoise::pad::consume_nav_attachment_toggle() && h.wii.active &&
+           (h.wii.controller==porpoise::pad::WiiRemote || h.wii.controller==porpoise::pad::WiiRemoteNunchuk)) {
+            auto changed=h.wii;
+            changed.controller=h.wii.controller==porpoise::pad::WiiRemote ? porpoise::pad::WiiRemoteNunchuk : porpoise::pad::WiiRemote;
+            porpoise::core::set_wii(changed);
+            ps5::debug::mark(changed.controller==porpoise::pad::WiiRemote ? "Nav PS: Nunchuk detached" : "Nav PS: Nunchuk attached");
+        }
         publish_frame_pads();
         log_motion();
         /* A controller that joins mid-game is plugged into its GameCube port. */

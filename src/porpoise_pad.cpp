@@ -14,6 +14,9 @@
  * user who signs out frees their player. */
 #include "porpoise_pad.hpp"
 #include "porpoise_aim.hpp"
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+#include "porpoise_move_bridge.hpp"
+#endif
 #ifdef PORPOISE_DESKTOP
 #include "porpoise_platform.hpp"
 #endif
@@ -208,6 +211,8 @@ struct Slot
     float up[3] = {0, 0, 0};
     unsigned centre_seq = 0; /* the Remote's centrings seen (two-controller play's Nunchuk) */
     float centre_hold = 0;   /* how long R1 (L1) has been held, calmly */
+    float gyro_history[32][3]{};
+    unsigned gyro_history_count = 0, gyro_history_next = 0;
     bool centre_request = false; /* centre_now */
     aim::Smoother smoother;
     unsigned centrings = 0;  /* for the "centered" note on screen */
@@ -360,6 +365,18 @@ int classify_pose(const float accel[3], const WiiConfig &c, bool second)
 
 
 Slot g_slots[kMaxPlayers];
+bool g_nav_toggle[kMaxPlayers]{};
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+Slot g_move_native_menu[kMaxPlayers];
+bool g_nav_ps_held[kMaxPlayers]{}, g_nav_ps_armed[kMaxPlayers]{};
+#endif
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+porpoise::move_bridge::Client g_move_bridge[kMaxPlayers], g_nav_bridge[kMaxPlayers], g_trigger_bridge[kMaxPlayers];
+bool g_move_takeover[kMaxPlayers]{};
+bool g_move_connected[kMaxPlayers]{};
+bool g_move_centre_chord[kMaxPlayers]{};
+std::uint64_t g_move_rumble_us[kMaxPlayers]{};
+#endif
 PadSample g_samples[sample_capacity];
 const State g_none{};
 Mapping g_mapping = preset(LayoutPlayStation);
@@ -421,14 +438,23 @@ void push_triggers(Slot &slot)
 
 void push_rumble(Slot &slot)
 {
-    if (slot.handle < 0)
-        return;
     ScePadVibrationParam param{};
     if (g_rumble_enabled.load(std::memory_order_relaxed))
     {
         param.largeMotor = slot.motor_large;
         param.smallMotor = slot.motor_small;
     }
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+    const int move_player = int(&slot - g_slots);
+    if (move_player >= 0 && move_player < kMaxPlayers && g_move_takeover[move_player])
+    {
+        g_move_rumble_us[move_player] = monotonic_us();
+        (void)g_move_bridge[move_player].rumble(param.largeMotor, param.smallMotor, g_move_rumble_us[move_player]);
+        return;
+    }
+#endif
+    if (slot.handle < 0)
+        return;
     (void)scePadSetVibration(slot.handle, &param);
 }
 
@@ -526,7 +552,7 @@ void rescan(const std::int32_t *ids)
 
 /* The motion in this poll's readings: each one fused into the controller's
  * orientation, in order; the newest as it is for the readout and the core. */
-Motion read_motion(Slot &slot, std::int32_t count)
+Motion read_motion(Slot &slot, std::int32_t count, bool move_bridge = false)
 {
     Motion m;
     const PadSample *order[sample_capacity];
@@ -544,6 +570,11 @@ Motion read_motion(Slot &slot, std::int32_t count)
         if (slot.last_motion_us && p.timestamp_us <= slot.last_motion_us)
             continue; /* already seen */
         const float dt = slot.last_motion_us ? float(p.timestamp_us - slot.last_motion_us) * 1e-6f : 0.0f;
+        if (move_bridge) {
+            for(int axis=0;axis<3;++axis) slot.gyro_history[slot.gyro_history_next][axis]=p.angular_velocity[axis];
+            slot.gyro_history_next=(slot.gyro_history_next+1)%32;
+            slot.gyro_history_count=std::min(slot.gyro_history_count+1,32u);
+        }
         aim::fuse(slot.fusion, p.angular_velocity, p.acceleration, dt);
         slot.last_motion_us = p.timestamp_us;
         elapsed += std::min(dt, 0.05f);
@@ -575,7 +606,7 @@ Motion read_motion(Slot &slot, std::int32_t count)
     for (int i = 0; i < 3; ++i)
         g[i] = m.raw_gyro[i] - slot.fusion.bias[i];
     const float turning = std::sqrt(g[0] * g[0] + g[1] * g[1] + g[2] * g[2]);
-    const int seen = classify_pose(slot.up, g_wii, second);
+    const int seen = move_bridge ? expected_pose(g_wii, second) : classify_pose(slot.up, g_wii, second);
     bool reposed = false;
     if (slot.pose < 0)
         slot.pose = seen >= 0 ? seen : expected_pose(g_wii, second);
@@ -631,6 +662,7 @@ Motion read_motion(Slot &slot, std::int32_t count)
             slot.pose = seen; /* centring also reads the hold again */
         aim::level_grip(pose_basis(slot.pose), slot.up, slot.basis);
         slot.centre = aim::remote_angles(slot.fusion, slot.basis);
+        slot.smoother = {};
         slot.centred = true;
         slot.pose_wait = 0;
         slot.centre_seq = g_centre_seq;
@@ -704,7 +736,7 @@ Motion read_motion(Slot &slot, std::int32_t count)
     const float reach = float(std::clamp(g_wii.reach, 50, 200)) / 100.0f;
     scale.half_x /= reach;
     scale.half_y /= reach;
-    if (g_wii.pointer == PointerGyro)
+    if (move_bridge || g_wii.pointer == PointerGyro)
     {
         float x = 0, y = 0;
         if (slot.centred)
@@ -724,7 +756,7 @@ Motion read_motion(Slot &slot, std::int32_t count)
         m.touch_x = last.touch[0].x;
         m.touch_y = last.touch[0].y;
     }
-    if (g_wii.pointer == PointerTouch)
+    if (!move_bridge && g_wii.pointer == PointerTouch)
     {
         if (m.touching)
         {
@@ -733,6 +765,10 @@ Motion read_motion(Slot &slot, std::int32_t count)
         }
         m.aim_x = slot.pointer_x;
         m.aim_y = slot.pointer_y;
+    }
+    if (move_bridge) {
+        m.aim_x = std::clamp(m.aim_x, -0.95f, 0.95f);
+        m.aim_y = std::clamp(m.aim_y, -0.95f, 0.95f);
     }
     m.pointer_x = std::clamp(m.aim_x, -1.0f, 1.0f);
     m.pointer_y = std::clamp(m.aim_y, -1.0f, 1.0f);
@@ -763,9 +799,11 @@ Motion read_motion(Slot &slot, std::int32_t count)
 
 bool g_ff_buttons = true; /* set_fast_forward_buttons */
 
-State read_slot(Slot &slot)
+State read_slot(Slot &slot, const PadSample *external = nullptr)
 {
-    const std::int32_t count = scePadRead(slot.handle, g_samples, sample_capacity);
+    if (external)
+        g_samples[0] = *external;
+    const std::int32_t count = external ? 1 : scePadRead(slot.handle, g_samples, sample_capacity);
     if (count == 0)
     {
         slot.state.ff_step = false; /* a press counts once, not again on every repeat of the state */
@@ -780,7 +818,7 @@ State read_slot(Slot &slot)
             newest = &g_samples[i];
     if (newest == nullptr || !newest->connected || (newest->buttons & pad_intercepted) != 0)
         return State{}; /* off, or the system menu has the pad: release everything */
-    const Motion motion = read_motion(slot, count);
+    const Motion motion = read_motion(slot, count, external != nullptr);
 
     /* The touch pad is the fast-forward modifier: touch pad + R1 steps fast
      * forward, touch pad + R2 holds it. R1 and R2 don't reach the game while
@@ -941,7 +979,7 @@ State read_slot(Slot &slot)
             return out;
         };
         const int *retro = retro_table(g_wii.controller);
-        next.joypad = bits(wii_layout(g_wii, false, slot.pose), retro);
+        next.joypad = bits(wii_layout(g_wii, false, external ? PoseTriggerRight : slot.pose), retro);
         /* A flick is sent as a shake only where the game doesn't feel the
          * motion itself. */
         const bool with_nunchuk = g_wii.controller == WiiRemoteNunchuk || g_wii.controller == WiiTwoControllers;
@@ -1019,6 +1057,17 @@ bool open()
     std::lock_guard<std::recursive_mutex> lock(g_lock);
     g_ready = true;
     g_initial_user = user_id;
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+    if (FILE *enable = std::fopen("/data/porpoise-move-bridge.enable", "r"))
+    {
+        std::fclose(enable);
+        for (int player=0; player<kMaxPlayers; ++player) {
+            (void)g_nav_bridge[player].open(std::uint16_t(9980+player));
+            (void)g_trigger_bridge[player].open(std::uint16_t(9984+player));
+            ps5::debug::mark(g_move_bridge[player].open(std::uint16_t(9976+player)) ? "Move bridge: player channel listening" : "Move bridge: socket unavailable");
+        }
+    }
+#endif
     open_slot(0, user_id, 10);
     std::int32_t ids[16];
     for (std::int32_t &id : ids)
@@ -1031,6 +1080,13 @@ bool open()
 void close()
 {
     std::lock_guard<std::recursive_mutex> lock(g_lock);
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+    for (int player=0;player<kMaxPlayers;++player) {
+        (void)g_move_bridge[player].rumble(0,0,monotonic_us());
+        g_move_bridge[player].close();g_nav_bridge[player].close();g_trigger_bridge[player].close();
+        g_move_takeover[player]=g_move_connected[player]=g_move_centre_chord[player]=false;
+    }
+#endif
     for (int player = 0; player < kMaxPlayers; ++player)
         close_slot(player);
     g_ready = false;
@@ -1122,8 +1178,150 @@ const State &poll()
     std::lock_guard<std::recursive_mutex> lock(g_lock);
     if (scan && g_ready)
         rescan(ids);
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+    const std::uint64_t bridge_now = monotonic_us();
+    for (int player=0;player<kMaxPlayers;++player) {
+        g_nav_bridge[player].poll(bridge_now);
+        g_trigger_bridge[player].poll(bridge_now);
+        g_move_bridge[player].poll(bridge_now);
+        const bool takeover = g_move_bridge[player].active(bridge_now);
+        const bool move_connected = g_move_bridge[player].fresh(bridge_now);
+        if (takeover != g_move_takeover[player] || move_connected != g_move_connected[player])
+        {
+            Slot &slot = g_slots[player];
+            slot.last_motion_us = 0;
+            slot.fusion = {};
+            slot.gyro_history_count = slot.gyro_history_next = 0;
+            slot.centred = false;
+            slot.raw_prev = 0;
+            slot.shake_frames = 0;
+            slot.state = {};
+            g_move_takeover[player] = takeover;
+            g_move_connected[player] = move_connected;
+            g_move_centre_chord[player] = false;
+            slot.up[0] = slot.up[1] = slot.up[2] = 0;
+            slot.smoother = {};
+            slot.centre_hold = 0;
+            slot.centre_was = false;
+            char message[120];
+            std::snprintf(message,sizeof(message),"Move bridge: player %d %s",player+1,move_connected?"connected":takeover?"waiting for reconnect":"returning to native input");
+            ps5::debug::mark(message);
+        }
+        if (takeover && bridge_now - g_move_rumble_us[player] >= 100000 &&
+            (g_slots[player].motor_large || g_slots[player].motor_small))
+        { push_rumble(g_slots[player]); }
+        Slot &slot = g_slots[player];
+        if (takeover)
+        {
+            slot.state = {};
+            if (g_move_bridge[player].fresh(bridge_now))
+            {
+                PadSample sample;
+                std::memcpy(&sample, g_move_bridge[player].packet().pad, sizeof(sample));
+                if (g_trigger_bridge[player].fresh(bridge_now)) {
+                    const auto *trigger_pad=g_trigger_bridge[player].packet().pad;
+                    sample.right_trigger=std::max(sample.right_trigger,trigger_pad[9]);
+                    if(porpoise::move_bridge::detail::u32(trigger_pad)&pad_r2) sample.buttons |= pad_r2;
+                }
+                const std::uint32_t physical = sample.buttons;
+                if (physical & 0x00020000u)
+                    sample.buttons = (sample.buttons & ~0x00020000u) | pad_cross;
+                if (g_wii.active)
+                    sample.buttons &= ~(pad_up | pad_down | pad_left | pad_right);
+                if (g_wii.active && (g_wii.controller == WiiRemote ||
+                    g_wii.controller == WiiRemoteNunchuk || g_wii.controller == WiiTwoControllers))
+                {
+                    sample.buttons &= ~(pad_cross | pad_circle | pad_square | pad_triangle);
+                    if (physical & 0x00020000u) sample.buttons |= pad_cross;   /* Move -> A */
+                    if ((physical & (pad_circle | pad_l2 | pad_r2)) || sample.left_trigger > 20 || sample.right_trigger > 20) sample.buttons |= pad_r2;
+                    sample.buttons &= ~pad_l2; sample.left_trigger = 0;      /* Circle -> B until T is recovered */
+                    if (physical & pad_cross) sample.buttons |= pad_square;  /* X -> 1 */
+                    if (physical & pad_square) sample.buttons |= pad_triangle; /* Square -> 2 */
+                    if (physical & pad_triangle) sample.buttons |= pad_options; /* Triangle -> Plus */
+                }
+                const bool centre_chord = (physical & (0x00000001u | pad_touch_pad)) != 0;
+                if (centre_chord) {
+                    sample.buttons &= ~(0x00000001u | pad_touch_pad);
+                    if (!g_move_centre_chord[player]) {
+                        slot.centre_request = true;
+                        // Select also learns the current stationary gyro offset.
+                        // Reject moving samples instead of calibrating a turn away.
+                        (void)calibrate_now(player);
+                    }
+                }
+                g_move_centre_chord[player] = centre_chord;
+                slot.state = read_slot(slot, &sample);
+            }
+            /* Move aiming uses its own gyro continuously; optical loss never hides it. */
+        }
+        else
+            slot.state = slot.handle >= 0 ? read_slot(slot) : State{};
+
+        bool nav_ps=false;
+        if(g_nav_bridge[player].fresh(bridge_now)){
+            nav_ps=(porpoise::move_bridge::detail::u32(g_nav_bridge[player].packet().pad)&0x10000u)!=0;
+            if(!nav_ps)g_nav_ps_armed[player]=true;
+        }else g_nav_ps_armed[player]=false;
+        g_nav_toggle[player]=nav_ps&&g_nav_ps_armed[player]&&!g_nav_ps_held[player]&&g_wii.active&&!g_wii.menu&&
+            (g_wii.controller==WiiRemote||g_wii.controller==WiiRemoteNunchuk);
+        g_nav_ps_held[player]=nav_ps;
+        if(takeover && slot.handle>=0){
+            Slot &native=g_move_native_menu[player];
+            if(native.handle!=slot.handle){native={};native.handle=slot.handle;native.user=slot.user;}
+            native.state=read_slot(native);
+            slot.state.ps_menu_combo |= native.state.ps_menu_combo;
+            slot.state.buttons |= native.state.buttons;
+            slot.state.joypad |= native.state.joypad;
+            slot.state.nunchuk |= native.state.nunchuk;
+            auto merge_axis=[](std::int16_t a,std::int16_t b){return std::abs(b)>std::abs(a)?b:a;};
+            slot.state.left_x=merge_axis(slot.state.left_x,native.state.left_x);
+            slot.state.left_y=merge_axis(slot.state.left_y,native.state.left_y);
+            slot.state.right_x=merge_axis(slot.state.right_x,native.state.right_x);
+            slot.state.right_y=merge_axis(slot.state.right_y,native.state.right_y);
+            slot.state.l2=std::max(slot.state.l2,native.state.l2);
+            slot.state.r2=std::max(slot.state.r2,native.state.r2);
+            slot.state.ff_step |= native.state.ff_step;
+            slot.state.ff_hold |= native.state.ff_hold;
+            slot.state.quick_save |= native.state.quick_save;
+            slot.state.quick_load |= native.state.quick_load;
+            slot.state.screenshot |= native.state.screenshot;
+            // Keep slot.state.motion exclusively from the Move bridge.
+
+        }
+        if (g_nav_bridge[player].fresh(bridge_now) && (!g_wii.active || g_wii.menu)) {
+            PadSample nav{};std::memcpy(&nav,g_nav_bridge[player].packet().pad,sizeof(nav));
+            for(int control=0;control<CtlCount;++control)
+                if(nav.buttons & kControlPadBit[control])slot.state.buttons |= kControlButton[control];
+            if(std::abs(stick(nav.left_x))>std::abs(slot.state.left_x))slot.state.left_x=stick(nav.left_x);
+            if(std::abs(stick(nav.left_y))>std::abs(slot.state.left_y))slot.state.left_y=stick(nav.left_y);
+            if(slot.state.left_x < -12000)slot.state.buttons |= BtnLeft;
+            if(slot.state.left_x > 12000)slot.state.buttons |= BtnRight;
+            if(slot.state.left_y < -12000)slot.state.buttons |= BtnUp;
+            if(slot.state.left_y > 12000)slot.state.buttons |= BtnDown;
+        }
+        if (takeover && !g_wii.menu && g_nav_bridge[player].fresh(bridge_now) &&
+            (g_wii.controller == WiiRemoteNunchuk || g_wii.controller == WiiTwoControllers)) {
+            PadSample nav{};std::memcpy(&nav,g_nav_bridge[player].packet().pad,sizeof(nav));
+            if(std::abs(stick(nav.left_x))>std::abs(slot.state.left_x))slot.state.left_x=stick(nav.left_x);
+            if(std::abs(stick(nav.left_y))>std::abs(slot.state.left_y))slot.state.left_y=stick(nav.left_y);
+            // Preserve Navigation's extra controls alongside its Nunchuk inputs.
+            const struct { std::uint32_t pad; unsigned retro; } nav_buttons[] = {
+                {pad_cross, RETRO_DEVICE_ID_JOYPAD_A}, {pad_circle, RETRO_DEVICE_ID_JOYPAD_B},
+                {pad_up, RETRO_DEVICE_ID_JOYPAD_UP}, {pad_down, RETRO_DEVICE_ID_JOYPAD_DOWN},
+                {pad_left, RETRO_DEVICE_ID_JOYPAD_LEFT}, {pad_right, RETRO_DEVICE_ID_JOYPAD_RIGHT},
+                {pad_l3, RETRO_DEVICE_ID_JOYPAD_L3}
+            };
+            for (const auto &button : nav_buttons)
+                if (nav.buttons & button.pad)
+                    slot.state.joypad |= std::uint16_t(1u << button.retro);
+            if(nav.buttons & pad_l1)slot.state.joypad |= std::uint16_t(1u<<RETRO_DEVICE_ID_JOYPAD_X);
+            if((nav.buttons & pad_l2)||nav.left_trigger>20)slot.state.joypad |= std::uint16_t(1u<<RETRO_DEVICE_ID_JOYPAD_Y);
+        }
+    }
+#else
     for (Slot &slot : g_slots)
         slot.state = slot.handle >= 0 ? read_slot(slot) : State{};
+#endif
     return g_slots[0].state;
 }
 
@@ -1140,7 +1338,7 @@ State snapshot(int player)
 
 bool connected(int player)
 {
-    return player >= 0 && player < kMaxPlayers && g_slots[player].handle >= 0 && g_slots[player].state.connected;
+    return player >= 0 && player < kMaxPlayers && g_slots[player].state.connected;
 }
 
 int connected_count()
@@ -1160,6 +1358,8 @@ void set_wii(const WiiConfig &config)
     if ((config.active && !was) || turned)
         for (Slot &slot : g_slots)
         {
+            if (!turned && move_controller_active() && slot.centred)
+                continue; /* Retain the center established in the Move setup screen. */
             /* A new game or a new way of holding it: find the middle again. */
             slot.pointer_x = slot.pointer_y = 0;
             slot.centred = false;
@@ -1313,6 +1513,51 @@ WiiLayout wii_layout_plain(const WiiConfig &config, bool second, int pose)
         break;
     }
     return lay;
+}
+
+bool nav_controller_active(int player)
+{
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    return player>=0 && player<kMaxPlayers && g_nav_bridge[player].fresh(monotonic_us());
+#else
+    (void)player;return false;
+#endif
+}
+
+bool move_controller_active()
+{
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    return g_move_bridge[0].fresh(monotonic_us());
+#else
+    return false;
+#endif
+}
+
+bool consume_nav_attachment_toggle(int player)
+{
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    if(player<0||player>=kMaxPlayers)return false;
+    bool requested=g_nav_toggle[player];g_nav_toggle[player]=false;return requested;
+}
+
+bool calibrate_now(int player)
+{
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    if(player<0||player>=kMaxPlayers)return false;
+    Slot &slot=g_slots[player];slot.centre_request=true;
+#if defined(PORPOISE_MOVE_BRIDGE) && !defined(PORPOISE_DESKTOP)
+    if(!g_move_bridge[player].fresh(monotonic_us())||slot.gyro_history_count<16)return false;
+    float mean[3]{},variance[3]{};
+    for(unsigned i=0;i<slot.gyro_history_count;++i)for(int axis=0;axis<3;++axis)mean[axis]+=slot.gyro_history[i][axis]/float(slot.gyro_history_count);
+    for(unsigned i=0;i<slot.gyro_history_count;++i)for(int axis=0;axis<3;++axis){float d=slot.gyro_history[i][axis]-mean[axis];variance[axis]+=d*d/float(slot.gyro_history_count);}
+    for(int axis=0;axis<3;++axis)if(!std::isfinite(mean[axis])||std::fabs(mean[axis])>.08f||variance[axis]>.0004f)return false;
+    for(int axis=0;axis<3;++axis)slot.fusion.bias[axis]=mean[axis];
+    return true;
+#else
+    return false;
+#endif
 }
 
 void centre_now(int player)

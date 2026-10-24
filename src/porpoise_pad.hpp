@@ -206,6 +206,10 @@ void set_wii_buttons(const int (*sets)[CtlCount]);
 int wii_button_set(int controller);
 /* Centre player's pointer now, as R1 held would (the Wii Remote setup), and
  * move the centre by (yaw, pitch) radians (yaw + right, pitch + up). */
+bool move_controller_active();
+bool nav_controller_active(int player = 0);
+bool consume_nav_attachment_toggle(int player = 0);
+bool calibrate_now(int player);
 void centre_now(int player);
 void shift_centre(int player, float yaw, float pitch);
 

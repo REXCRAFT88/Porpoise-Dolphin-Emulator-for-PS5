@@ -1,3 +1,5 @@
+Experimental opt-in Move/Nav integration: [developer handoff](docs/move-bridge/README.md). This branch is not a finalized release; see its validation and known limitations.
+
 <p align="center">
   <img src="docs/images/banner.png" alt="Porpoise - Dolphin Emulator for PS5 " width="100%">
 </p>

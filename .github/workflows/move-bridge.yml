@@ -1,0 +1,13 @@
+name: Move bridge host checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Protocol, backend integration and default-disabled compile
+        run: CXX=clang++ bash tests/move_bridge/run.sh

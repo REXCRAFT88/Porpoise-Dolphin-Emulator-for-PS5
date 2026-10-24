@@ -90,7 +90,12 @@ directory_wrap_flags+=" --wrap=realpath --wrap=getcwd --wrap=mkdir --wrap=open -
 PS5_PAYLOAD_SDK="$sdk" \
 PS5_CLANG=/usr/bin/clang \
 PYTHONPATH="$root/tooling/pystub${PYTHONPATH:+:$PYTHONPATH}" \
-APP_DEFINITIONS="PS5_RETROARCH_RADV PORPOISE" \
+# Move bridge is explicitly opt-in and remains disabled in normal builds.
+move_bridge_definition=""
+if [[ "${PORPOISE_MOVE_BRIDGE:-0}" == "1" ]]; then
+    move_bridge_definition="PORPOISE_MOVE_BRIDGE"
+fi
+APP_DEFINITIONS="PS5_RETROARCH_RADV PORPOISE $move_bridge_definition" \
 APP_INCLUDE_PATHS="third_party third_party/libretro third_party/vulkan third_party/libsmb2/include third_party/libnfs/include build" \
 APP_STATIC_ARCHIVES="" \
 APP_SDK_ARCHIVES="libps5platform.a" \

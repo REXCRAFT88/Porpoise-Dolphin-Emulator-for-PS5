@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "snapshot": "beta6.2",
+  "date": "2026-10-24",
+  "players": 4,
+  "physical_slots": 8,
+  "internal_radio_eight_links_verified": false,
+  "native_dualsense_reconnect": "known_failure",
+  "move_trigger_wii_b": "user_confirmed",
+  "ps3eye_tracking": "user_confirmed_with_false_positives",
+  "phone_mjpeg": "synthetic_ps5_stream_verified_real_phone_pending",
+  "uvc_real_stream": "not_verified",
+  "virtual_dualsense": "guarded_disabled",
+  "standalone_app_tile": "not_working",
+  "rpcs3_integration": "plan_only",
+  "vibration_feedback_receive": "not_implemented",
+  "protocol": {
+    "input_version": 2,
+    "input_bytes": 184,
+    "primary_move_ports": [
+      9976,
+      9977,
+      9978,
+      9979
+    ],
+    "nav_ports": [
+      9980,
+      9981,
+      9982,
+      9983
+    ],
+    "second_move_ports": [
+      10000,
+      10001,
+      10002,
+      10003
+    ],
+    "input_timeout_ms": 500,
+    "optical_timeout_ms": 200
+  }
+}

@@ -992,6 +992,39 @@ void App::draw_wii_controls(float x, float y, float w, float h, const WiiConfig 
         return;
     g.panel(x, y, w, h, rgba(0x0A1236, 0.86f * alpha), 0.85f, kR, with_alpha(rgba(0x3D4F9E), 0.9f * alpha), 1.6f, 0,
             0.10f);
+    if (porpoise::pad::move_controller_active())
+    {
+        const float cx=x+w*.39f, top=y+h*.14f, unit=std::min(w/960.0f,h/780.0f);
+        auto color=[&](unsigned c){return with_alpha(rgba(c),alpha);};
+        g.text_mid(Font::Bold,ts(34),x+40,y+50,color(0xFFFFFF),Align::Left,tr("PS Move"));
+        g.panel(cx-43*unit,top+100*unit,86*unit,420*unit,color(0x242832),.9f,40*unit,color(0x7B8499),2);
+        g.blob(cx,top+60*unit,160*unit,160*unit,color(0x418FFF));
+        g.panel(cx-58*unit,top+2*unit,116*unit,116*unit,color(0xB7DAFF),.9f,58*unit,color(0xEDF7FF),2);
+        g.panel(cx-20*unit,top+202*unit,40*unit,55*unit,color(0x555C70),.9f,16*unit,color(0xE5E9F5),2);
+        g.text_mid(Font::Bold,ts(16),cx,top+230*unit,color(0xFFFFFF),Align::Center,"Move");
+        g.glyph(Glyph::Triangle,cx,top+165*unit,19*unit,color(0x82D6AD));
+        g.glyph(Glyph::Circle,cx+28*unit,top+194*unit,17*unit,color(0xF696A4));
+        g.glyph(Glyph::Cross,cx,top+279*unit,17*unit,color(0x9EC9FA));
+        g.glyph(Glyph::Square,cx-28*unit,top+194*unit,17*unit,color(0xD9A5D6));
+        g.panel(cx-11*unit,top+330*unit,22*unit,22*unit,color(0x666E83),.8f,11*unit);
+        if(wii.controller==WiiRemoteNunchuk || porpoise::pad::nav_controller_active()){
+            const float nx=x+w*.19f,ny=top+185*unit;
+            g.panel(nx-32*unit,ny,64*unit,290*unit,color(0x242832),.9f,30*unit,color(0x7B8499),2);
+            g.panel(nx-23*unit,ny+28*unit,46*unit,46*unit,color(0x10151F),.9f,23*unit,color(0xB7DAFF),2);
+            g.panel(nx-10*unit,ny+99*unit,20*unit,63*unit,color(0x7B8499),.9f,4*unit);
+            g.panel(nx-31*unit,ny+120*unit,62*unit,20*unit,color(0x7B8499),.9f,4*unit);
+            g.glyph(Glyph::Cross,nx-13*unit,ny+194*unit,15*unit,color(0x9EC9FA));
+            g.glyph(Glyph::Circle,nx+14*unit,ny+194*unit,15*unit,color(0xF696A4));
+            g.text_mid(Font::Regular,ts(16),nx,ny+320*unit,color(0xB6C8F5),Align::Center,tr("Navigation"));
+        }
+
+        const float tx=x+w*.56f;float ty=top+115*unit;
+        auto label=[&](const char *text){g.text_mid(Font::Regular,ts(23),tx,ty,color(0xE6ECFF),Align::Left,tr(text));ty+=48*unit;};
+        label("Move button: A / Confirm");label("Circle: B (alternate)");label("X: 1    Square: 2");label("Triangle: Plus");label("T trigger: B");label("Select: recenter");
+        if (porpoise::pad::nav_controller_active()) { label("Navigation: connected"); label("Stick: Nunchuk   L1: C   L2: Z"); label("Nav X: A   Circle: B   D-pad: directions"); }
+        g.text_mid(Font::Regular,ts(22),x+w*.5f,y+h-55,color(0xB6C8F5),Align::Center,tr("Point at the screen and press the Move button to confirm."));
+        return;
+    }
     if (wii.controller == WiiGameCube)
     {
         /* The GameCube's own layout, as in a GameCube game. */
@@ -1282,7 +1315,7 @@ App::Action App::start_game(Game *g, const std::string &state, bool resume_asked
             return Action::None;
         }
     }
-    if (g && g->platform == "Wii" && eff.wii_setup_ask)
+    if (g && g->platform == "Wii" && (eff.wii_setup_ask || porpoise::pad::move_controller_active()))
     {
         open_wii_setup(g, true, state);
         return Action::None;
@@ -1353,6 +1386,8 @@ void App::open_wii_setup(Game *g, bool launch, const std::string &state)
     if (g)
         eff.load(game_settings_path(*g), true);
     ws_controller_ = std::clamp(eff.wii_controller, 0, int(WiiControllerCount) - 1);
+    if (porpoise::pad::move_controller_active() && porpoise::pad::nav_controller_active() && ws_controller_ == WiiRemote)
+        ws_controller_ = WiiRemoteNunchuk;
     ws_ask_ = eff.wii_setup_ask;
     ws_step_ = kWsController;
     ws_row_ = 0;
@@ -1390,7 +1425,7 @@ void App::close_wii_setup()
         menu_change_ = "wii_setup";
         return;
     }
-    porpoise::pad::set_wii(WiiConfig{});
+    if (!porpoise::pad::move_controller_active()) porpoise::pad::set_wii(WiiConfig{});
     if (ws_return_ == Screen::GameSettings)
     {
         build_game_settings();
@@ -1417,7 +1452,7 @@ App::Action App::update_wii_setup(bool up, bool down, bool left, bool right)
         close_wii_setup();
         if (launch)
         {
-            porpoise::pad::set_wii(WiiConfig{});
+            if (!porpoise::pad::move_controller_active()) porpoise::pad::set_wii(WiiConfig{});
             launch_ = ws_game_;
             launch_state_ = ws_state_;
             return Action::Launch;
@@ -1576,7 +1611,10 @@ App::Action App::update_wii_setup(bool up, bool down, bool left, bool right)
                 ws_hold_from_ = time_;
             if (time_ - ws_hold_from_ >= 0.5)
             {
-                porpoise::pad::centre_now(0);
+                if(porpoise::pad::move_controller_active()) {
+                    if(!porpoise::pad::calibrate_now(0)) { note("Keep the Move still a little longer, then try again.");ws_hold_from_=time_;break; }
+                }
+                else porpoise::pad::centre_now(0);
                 ws_hold_from_ = -1;
                 sfx(Sound::LaunchGame);
                 if (!pointing)
@@ -1711,7 +1749,7 @@ void App::draw_wii_setup(double time)
     const bool corners = ws_step_ == kWsTopLeft || ws_step_ == kWsBottomRight;
     if (!corners)
     {
-        const std::string title = ws_recal_only_ ? tr("Recalibrate the Pointer") : tr("Wii Remote Setup");
+        const std::string title = ws_recal_only_ ? tr("Recalibrate the Pointer") : (porpoise::pad::move_controller_active() ? tr("PS Move Setup and Calibration") : tr("Wii Remote Setup"));
         g.text_mid(Font::Bold, ts(40), 90, 70, kWhite, Align::Left, title);
         const bool alpha = ws_controller_ == WiiTwoControllers;
         const std::string tag = alpha ? tr("Alpha") : tr("Beta");
@@ -1863,7 +1901,7 @@ void App::draw_wii_setup(double time)
         }
         para(tr("Porpoise reads how you hold it, so tilts, swings and the pointer come out the right way."),
              with_alpha(kLavender, 0.85f));
-        para(tr("Then press Cross."), kLavender);
+        para(porpoise::pad::move_controller_active() ? tr("Then press the Move button.") : tr("Then press Cross."), kLavender);
         const porpoise::pad::Motion m2 = porpoise::pad::snapshot(1).motion;
         draw_wii_controls(870, 160, 960, 780, cfg, 1.0f, m.valid ? m.pose : -1, m2.valid ? m2.pose : -1);
         draw_prompts({{Glyph::Cross, "Next"}, {Glyph::Circle, "Back"}}, {}, "");
@@ -1900,7 +1938,7 @@ void App::draw_wii_setup(double time)
         const float fill = ws_hold_from_ >= 0 ? float((time_ - ws_hold_from_) / 0.5) : 0.0f;
         target(960, 540, fill);
         big_line(tr("Hold it the way you'll play and point at the dot."), 760, kWhite);
-        big_line(tr("Then hold Cross, keeping still."), 830, kLavender);
+        big_line(porpoise::pad::move_controller_active() ? tr("Hold the Move button while keeping still, then release it.") : tr("Then hold Cross, keeping still."), 830, kLavender);
         if (ws_controller_ == WiiTwoControllers)
             big_line(tr("Hold the second controller as you'll play, too."), 900, kLavender);
         draw_prompts({{Glyph::Cross, "Hold to Center"}, {Glyph::Circle, ws_recal_only_ ? "Close" : "Back"}}, {}, "");
@@ -1914,7 +1952,7 @@ void App::draw_wii_setup(double time)
         target(tx, ty2, 0);
         big_line(tl ? tr("Now point at the dot in the top-left corner") : tr("And the dot in the bottom-right corner"),
                  470, kWhite);
-        big_line(tr("and press Cross."), 540, kLavender);
+        big_line(porpoise::pad::move_controller_active() ? tr("and press the Move button.") : tr("and press Cross."), 540, kLavender);
         big_line(tr("This measures your screen from where you sit, so the pointer is where you point."), 640,
                  with_alpha(kLavender, 0.8f));
         draw_prompts({{Glyph::Cross, "This is the corner"}, {Glyph::Circle, "Back"}}, {}, "");
@@ -1931,7 +1969,7 @@ void App::draw_wii_setup(double time)
                 big_line(trf("Your screen: {x}\xC2\xB0 to the sides, {y}\xC2\xB0 up and down.",
                              {{"x", std::to_string(t.wii_screen_x / 10)}, {"y", std::to_string(t.wii_screen_y / 10)}}),
                          540, kLavender);
-            big_line(tr("If it wanders while you play, hold R1 a moment to center it."), 610,
+            big_line((porpoise::pad::move_controller_active() ? tr("Point at screen center and press Select to recenter.") : tr("If it wanders while you play, hold R1 a moment to center it.")), 610,
                      with_alpha(kLavender, 0.8f));
             if (m.centred)
             {

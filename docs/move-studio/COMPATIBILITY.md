@@ -40,3 +40,7 @@ Snapshot: 2026-10-24, Move Studio beta6.2 / experimental Porpoise integration. H
 ## Before enabling by default
 
 Follow [the Porpoise acceptance checklist](../move-bridge/VALIDATION.md), including full native build/link with the feature off and on, native controller coexistence, physical multiplayer, stale-input recovery and sleep/resume. Keep this file and [STATUS.md](STATUS.md) updated with actual evidence when a status changes.
+
+### Bluetooth isolation update — 2026-10-25
+
+After rest-mode recovery and a confirmed working native reconnect baseline, a finite probe that only opened/held the internal Bluetooth USB device with O_RDWR reproduced the unsupported-device rejection. It sent no USB ioctls or Bluetooth commands and queued no reads. The kernel mechanism and recovery after close remain unproven. This strengthens the coexistence blocker; it is not a fix.

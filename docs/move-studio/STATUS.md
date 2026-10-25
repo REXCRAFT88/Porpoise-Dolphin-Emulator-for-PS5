@@ -29,3 +29,5 @@ Finite open-only/read-only isolation payloads are prepared. They require an obse
 ## Product boundaries
 
 Camera observations are 2D pixels and apparent blob size, not validated 3D position, optical orientation or complete 6DoF pose. The producer's quaternion is identity. Camera-based pointer correction is unfinished. Four player outputs do not prove eight physical radio connections.
+
+2026-10-25 follow-up: after rest-mode recovery and a confirmed working reconnect baseline, an O_RDWR-only open of the internal Bluetooth USB node (no USB ioctls or reads) also produced the reported unsupported-device reconnect failure. Native sharing remains unresolved; main bridge is stopped for recovery.

@@ -17,6 +17,9 @@ Retain actual upstream license files, copyright notices and required correspondi
 
 ## Research references (not claims of complete ports)
 
+- [johnhenry/ps-access](https://github.com/johnhenry/ps-access): real Access controller USB identity, profiles and physical input documentation; credits Jacek Fedorynski's earlier editor. Research only, no Access output implemented.
+- [FGGstore/FGG-XSense](https://github.com/FGGstore/FGG-XSense) and [srbraboo/Ghostpad](https://github.com/srbraboo/Ghostpad): alternative virtual-device registration/report and assignment research. No code copied or shell patches installed; revisions and limits in MOVE_ACCESS_OUTPUT_RESEARCH.md.
+
 - [thp/psmoveapi](https://github.com/thp/psmoveapi): Move reports and factory calibration interpretation. Its full 6DoF tracking/fusion is not included.
 - [nitsch/moveonpc input report](https://github.com/nitsch/moveonpc/wiki/Input-report): ZCM1 buttons, T and sensor layout.
 - [Linux hid-sony](https://github.com/torvalds/linux/blob/master/drivers/hid/hid-sony.c): Move RGB/rumble and Nav reports. Preserve notices if copying implementation, not merely interpreting a layout.

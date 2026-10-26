@@ -13,6 +13,9 @@ HTTP port 8095. Existing local-peer and literal-Host checks apply. Mutations req
 | POST /api/restart-bluetooth | Restart raw host, keep web service; known coexistence failure remains |
 | POST /api/stop | Full shutdown and camera stop marker; website disappears |
 | GET /api/usb | Registration diagnostic text |
+| GET /api/calibration?addr=<controller address> | Gyro calibration status (-1 unavailable, 0 ready, 1 sampling, 2 complete, 3 rejected) and progress percent |
+| POST /api/calibration?addr=<controller address>&action=start | Start stationary session gyro zeroing on a connected Move |
+| POST /api/calibration?addr=<controller address>&action=reset | Remove session gyro bias; retain factory calibration |
 | GET /api/log | Bounded log tail |
 | GET /api/camera | Source, message and UVC adapter capability |
 | GET /api/camera-preview | image/bmp, no-store; 503 when stale/unavailable |

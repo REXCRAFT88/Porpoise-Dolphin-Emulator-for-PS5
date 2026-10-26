@@ -1,5 +1,10 @@
 # Current status and evidence
 
+Beta6.10 adds a connected-Move Calibration page with stationary session gyro
+zeroing, movement/timeout rejection, reset, and aiming/camera setup links.
+See CALIBRATION.md for behavior and validation boundaries. Hardware gyro-zeroing
+and resulting aiming still need user verification.
+
 2026-10-26 virtual output: SDK-linked UserService/Pad imports passed native
 client initialization and credential restoration. A finite neutral virtual
 device was identified, bound, fed and removed successfully. Move + Nav gameplay

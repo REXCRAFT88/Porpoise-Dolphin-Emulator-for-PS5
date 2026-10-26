@@ -6,6 +6,7 @@ Updated 2026-10-25. Keep this list aligned with actual implementation and hardwa
 
 - [x] Initial external-only ASUS build test: user confirmed DualSense reconnects and navigates normally before Move/Nav migration. Long-session and simultaneous controller tests remain pending.
 - [ ] Investigate external adapter becoming silent during idle; restarting its external session restored ready state in the first live bridge test.
+- [ ] Fix Nav automatic reconnect after external service restart: initial wireless connection worked, but restart produced HID channel 0x11 setup timeout. Fully powering Nav off and back on recovered it without re-pairing; both channels/profile then opened. Move reconnect and DualSense coexistence passed their initial checks.
 - [x] Migrate one deliberately selected ZCM1 Move to ASUS through USB, back up and verify its host, and confirm wireless dashboard connection. Nav migration remains pending; do not repoint every attached controller automatically.
 - [ ] Validate input, output, reconnect, unplug/reinsert, multiplayer and native DualSense coexistence with the external backend.
 - [x] Initial external shutdown check: Move/Nav disconnected cleanly, external scan setting restored, lock released, and user confirmed DualSense reconnects/navigates without rest mode or reboot. Reattachment, long sessions and adapter removal remain pending.

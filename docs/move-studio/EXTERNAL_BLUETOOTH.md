@@ -36,7 +36,10 @@ With exactly one ZCM1 Move attached by USB, the explicit pairing tool passed a r
 
 The bridge later logged no controller replies after three idle probes; explicitly restarting its external session restored ready state. The cause is unresolved, including any interaction with separate USB helper lifecycle. Do not call long-idle stability solved. The prepared finite host check had only covered ten seconds. More diagnosis and lifecycle testing are needed.
 
+After the Move connected through ASUS, the user repeated the DualSense off/reconnect/home-screen test and confirmed: DualSense reconnects and navigates, and Move stays connected. This establishes coexistence in that tested active-controller scenario. External shutdown/restart, Nav, full multiplayer, camera concurrency and long idle sessions remain separate acceptance items; native service restoration after old internal-radio access is still unproven.
+
 - Pair/restore source: tools/pair-external-move.c. It requires exactly one Move and no USB Nav, verifies identity/target/backup, and attempts rollback on failed verification. DRY_RUN=1 suppresses writes; RESTORE_ORIGINAL=1 restores the saved host. Requires existing calibrated ZCM1 registration for the full motion test.
+- Nav migration source: tools/nav_usb_pair.c with NAV_EXTERNAL. One USB Nav passed NAV_DRY_RUN preflight; its original host was backed up per identity, its ASUS host was written/read back, and its seed identity saved. The Move remained connected through this operation. Wireless Nav connection/input is awaiting confirmation. NAV_EXTERNAL + NAV_RESTORE selects that Nav's original host backup; no generic system-radio reset is involved.
 - Protocol reference: https://github.com/thp/psmoveapi/blob/master/src/psmove.c (report 5 host-write layout, report 4 host-read layout).
 
 - ASUS support: https://www.asus.com/us/supportonly/usb-bt500/helpdesk_download/

@@ -1,5 +1,11 @@
 # Native Bluetooth coexistence/recovery research
 
+Follow-up: user recovered native DualSense by rest mode/wake. A native-paired
+Move navigated the home screen and remained responsive through a sixty-second
+Bluetooth HID callback subscription. Init/register/unregister succeeded, but
+zero callbacks arrived despite buttons, T and tilt. This is not a usable Move
+report path yet and does not justify reading the shared HCI endpoint again.
+
 The external adapter is a separate transport, not evidence that internal access is safe. Raw O_RDWR open of the internal ugen node reproduced unsupported DualSense reconnect; later rest-mode recovery was unreliable. No proven Sony service restart has been found.
 
 Next prepared comparison: tools/native-usbd-open-only.c opens the internal radio through Sony's USB service for 45 seconds, with no raw kernel file, claims, reads, HCI commands or pairing changes. This must be tested only after confirming a working native reconnect baseline, with the main bridge stopped and an observer. The helper closes its own handle/runtime. It is an experiment, not a recovery tool, and is not yet hardware-tested.

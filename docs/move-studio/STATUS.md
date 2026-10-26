@@ -1,5 +1,13 @@
 # Current status and evidence
 
+2026-10-26 virtual output: SDK-linked UserService/Pad imports passed native
+client initialization and credential restoration. A finite neutral virtual
+device was identified, bound, fed and removed successfully. Move + Nav gameplay
+and home-screen input remain unverified. Explicit external-only beta6.9 build
+exposes the mode selector; normal artifacts stay guarded. See VIRTUAL_OUTPUT_BETA.md.
+
+The dashboard now has a persistent top notice: connect desired DualSense controllers before starting Move Studio with internal Bluetooth; use rest mode/wake to recover reconnect, or restart if recovery fails. This is a workaround, not a native coexistence fix. The tested external ASUS setup has not reproduced the failure.
+
 Snapshot: beta6.2, 2026-10-24. Experimental PS5 homebrew, tested on firmware 13.60; no general firmware compatibility guarantee.
 
 Newer evidence (2026-10-25): normal camera build beta6.4 and external-only beta6.5-asus-test are documented in PHONE_CAMERA_UPDATE.md and EXTERNAL_BLUETOOTH.md. ASUS supports one tested wireless Move + Nav pair; user confirmed native DualSense reconnect while Move was active and after clean external shutdown. Move reconnected after bridge restart. Nav required a full controller power cycle, after which both HID channels and input profile became ready. Eight physical links, broad multiplayer/gameplay, long idle and camera concurrency are not certified. The internal-radio failure below remains unresolved; external coexistence avoids that access rather than repairing it.

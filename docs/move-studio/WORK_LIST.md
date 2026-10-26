@@ -8,6 +8,7 @@ Updated 2026-10-25. Keep this list aligned with actual implementation and hardwa
 - [ ] Investigate external adapter becoming silent during idle; restarting its external session restored ready state in the first live bridge test.
 - [x] Migrate one deliberately selected ZCM1 Move to ASUS through USB, back up and verify its host, and confirm wireless dashboard connection. Nav migration remains pending; do not repoint every attached controller automatically.
 - [ ] Validate input, output, reconnect, unplug/reinsert, multiplayer and native DualSense coexistence with the external backend.
+- [x] Initial external shutdown check: Move/Nav disconnected cleanly, external scan setting restored, lock released, and user confirmed DualSense reconnects/navigates without rest mode or reboot. Reattachment, long sessions and adapter removal remain pending.
 - [ ] Find a proven native Bluetooth recovery mechanism after internal raw-device access. A client HID Term/Init is not proven to restart the system service; rest mode has not recovered every observed failure.
 
 ## Controller profile artwork

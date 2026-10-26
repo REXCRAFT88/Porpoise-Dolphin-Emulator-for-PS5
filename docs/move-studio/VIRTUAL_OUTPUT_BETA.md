@@ -2,7 +2,8 @@
 
 2026-10-26: Move + Nav is the first system output target. It requires both
 assigned to the same player, with no second Move assigned. Existing mapping
-uses Move T as R2, Move/Cross as L1, Nav stick as left stick, Nav L2 as L2,
+uses Move T as R2, Move as Cross/X, physical Cross/X as L1,
+Nav stick as left stick, Nav L2 as L2,
 and calibrated Move motion as right stick and/or gyro, according to layout.
 
 ## Startup evidence

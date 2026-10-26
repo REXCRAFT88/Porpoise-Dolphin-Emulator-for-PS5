@@ -28,6 +28,17 @@ The items below include remaining acceptance work; basic transport/host initiali
 
 ## References
 
+### Initial external bridge hardware test
+
+The external-only beta6.5-asus-test bridge was deployed after the user's reported rest/restart cycle. Before migrating Move/Nav, the user confirmed DualSense turns off, reconnects and navigates normally while this build runs. This is a first coexistence success, not long-session or concurrent-controller certification.
+
+With exactly one ZCM1 Move attached by USB, the explicit pairing tool passed a read-only preflight, preserved its original host report locally, wrote the ASUS address using feature report 5 and verified it through report 4. A restore build is available. The user then confirmed that the Move appears connected wirelessly in Move Studio; the live API identifies it as PS Move ZCM1 (054c:03d5), with the external bridge ready. Independent button/trigger/motion validation and native DualSense reconnect while this Move is active remain pending. No identities or backup contents belong in public packages.
+
+The bridge later logged no controller replies after three idle probes; explicitly restarting its external session restored ready state. The cause is unresolved, including any interaction with separate USB helper lifecycle. Do not call long-idle stability solved. The prepared finite host check had only covered ten seconds. More diagnosis and lifecycle testing are needed.
+
+- Pair/restore source: tools/pair-external-move.c. It requires exactly one Move and no USB Nav, verifies identity/target/backup, and attempts rollback on failed verification. DRY_RUN=1 suppresses writes; RESTORE_ORIGINAL=1 restores the saved host. Requires existing calibrated ZCM1 registration for the full motion test.
+- Protocol reference: https://github.com/thp/psmoveapi/blob/master/src/psmove.c (report 5 host-write layout, report 4 host-read layout).
+
 - ASUS support: https://www.asus.com/us/supportonly/usb-bt500/helpdesk_download/
 - Linux kernel-team identification of 0b05:190e as Realtek 8761BU ASUS BT500: https://lists.ubuntu.com/archives/kernel-team/2022-June/131058.html
 - Logitech receiver identities: https://pwr-solaar.github.io/Solaar/devices/

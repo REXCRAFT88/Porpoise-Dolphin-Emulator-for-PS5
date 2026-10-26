@@ -4,8 +4,9 @@ Updated 2026-10-25. Keep this list aligned with actual implementation and hardwa
 
 ## Bluetooth
 
-- [ ] Test the external-only ASUS build after a clean PS5 restart and verified native DualSense reconnect baseline. User is not ready to restart yet; old bridge is stopped.
-- [ ] Migrate a deliberately selected Move/Nav to the external adapter through USB, backing up and verifying original host addresses. Do not repoint every attached controller automatically.
+- [x] Initial external-only ASUS build test: user confirmed DualSense reconnects and navigates normally before Move/Nav migration. Long-session and simultaneous controller tests remain pending.
+- [ ] Investigate external adapter becoming silent during idle; restarting its external session restored ready state in the first live bridge test.
+- [x] Migrate one deliberately selected ZCM1 Move to ASUS through USB, back up and verify its host, and confirm wireless dashboard connection. Nav migration remains pending; do not repoint every attached controller automatically.
 - [ ] Validate input, output, reconnect, unplug/reinsert, multiplayer and native DualSense coexistence with the external backend.
 - [ ] Find a proven native Bluetooth recovery mechanism after internal raw-device access. A client HID Term/Init is not proven to restart the system service; rest mode has not recovered every observed failure.
 

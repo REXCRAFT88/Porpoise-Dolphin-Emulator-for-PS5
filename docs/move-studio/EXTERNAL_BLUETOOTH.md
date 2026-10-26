@@ -1,0 +1,37 @@
+# External Bluetooth transport development
+
+2026-10-25: live descriptor inventory through sceUsbdGetDeviceList found ASUS 0b05:190e with Bluetooth class e0/01/01, plus Logitech 046d:c52b with HID interfaces. The latter is a Unifying receiver, not a general Bluetooth HCI adapter.
+
+The finite tools/external-bt-probe.c targets only ASUS 0b05:190e. It uses Sony USB APIs, claims interface 0, sends HCI Read Local Version Information (0x1001), receives command completion on interrupt endpoint 0x81 and releases/closes the adapter. No internal-radio device is opened, no HCI reset issued, no firmware uploaded and no pairing changed.
+
+Hardware result: init=0, open succeeded, claim=0, command sent=3 bytes, event 0e0c020110000a0b000a5d006187, release=0. Status is success, HCI version 0x0a, manufacturer 0x005d. This proves basic external command/event traffic, not Move/Nav pairing, ACL reliability, native DualSense coexistence or long sessions. Normal beta6.2 bridge/camera remained running during this probe and still reported active afterward.
+
+## Next implementation
+
+### Implementation progress, 2026-10-25
+
+The new hci_external backend uses bounded synchronous command/event/ACL transfers through Sony's USB API. It validates ASUS 0b05:190e and HCI endpoints, reassembles events/ACL, handles removal, and releases/closes resources without pending callbacks. Mock tests cover identity/endpoint rejection, commands, fragmented traffic, removal, repeated close and reopen. The SDK build succeeds.
+
+A finite hardware host initialization check succeeded: 6 ACL buffers of 1021 bytes, 8 LE buffers of 251 bytes, local address available, Simple Pairing/page scan enabled. It polled for ten seconds, restored page scan to its prior value, and closed successfully. It did not pair controllers or establish native DualSense coexistence.
+
+The separate `make ps5 EXTERNAL_BT=1` build is beta6.5-asus-test. The internal hci_usb object is omitted entirely. It uses pads-asus.db and a separate asus-address.bin, and disables the automatic USB registration worker so existing controller host addresses are not silently changed. Calibration/assignment records remain shared. This experimental full bridge is built but not deployed: a clean native reconnect baseline is pending. Successful external close does not repair any damage left by an earlier internal-radio session.
+
+The items below include remaining acceptance work; basic transport/host initialization is now implemented, not complete controller support.
+
+- Add a distinct hci_ops backend using the external USB device handle. Explicit opt-in, no fallback to the internal node.
+- Validate VID/PID and Bluetooth interface/endpoints before claim; handle removal/reinsert without assuming stable bus addresses.
+- Maintain concurrent interrupt-event and bulk-ACL reads, bounded command/output transfers, reassembly, cancellation and complete cleanup.
+- Test endpoint discovery, event/ACL fragmentation, timeouts, removal and errors using host mocks before deploying a bridge build.
+- Test standard HCI initialization on the external adapter. ASUS USB-BT500 uses Realtek 8761BU; firmware/setup may need attention, despite Read Local Version succeeding. Do not blindly upload firmware.
+- Keep adapter host addresses, controller pairing and saved registrations separate. Existing controllers are paired to the internal radio; do not silently overwrite their host addresses. Any user-selected move to the external adapter needs a backup and a clear USB pairing flow.
+- Validate physical Move/Nav input and native DualSense reconnect separately, then multiplayer/camera together. One adapter can serve multiple links subject to hardware/stack capacity; two adapters do not automatically double capacity.
+
+## References
+
+- ASUS support: https://www.asus.com/us/supportonly/usb-bt500/helpdesk_download/
+- Linux kernel-team identification of 0b05:190e as Realtek 8761BU ASUS BT500: https://lists.ubuntu.com/archives/kernel-team/2022-June/131058.html
+- Logitech receiver identities: https://pwr-solaar.github.io/Solaar/devices/
+
+## Native Bluetooth recovery research
+
+Existing local probes expose sceBluetoothHidInit/Term/Open/Close and callback APIs. A client Term/Init is not proven to restart Sony's system Bluetooth service or restore its radio ownership. Do not infer an ABI from a symbol name or kill system processes blindly. No reliable service restart has been established. The later file-only test did not recover after rest mode according to the user; full restart was requested and subsequently reported. Keep the earlier rest-mode successes and later failure distinct.

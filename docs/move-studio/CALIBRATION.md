@@ -1,5 +1,12 @@
 # Calibration menu
 
+This menu does not yet perform center-and-edge screen aiming calibration.
+Stationary gyro zeroing and emulator Select recentering are separate operations.
+Any future screen-target wizard must pass its resulting transform to the
+consumer that owns the pointer; displaying targets alone would not calibrate
+Porpoise or a native game. There is no cross-application aiming transform API
+in the current bridge protocol.
+
 Beta6.10 adds a Calibration page for each connected ZCM1 Move. Place the
 controller on a stable surface, release all buttons, select its player/device,
 then select Start calibration. The page shows progress and completion/error.

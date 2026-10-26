@@ -52,6 +52,32 @@ through this proposed adapter.
 
 ## Nav as Access
 
+### Own-process code inspection follow-up
+
+The optional CODE_METADATA inventory build copied bounded instruction windows
+from its own loaded Pad module for offline inspection. It did not invoke any
+controller function. Local module bytes are excluded from this repository.
+
+Observed wrapper behavior on firmware 13.60:
+
+- GetControllerTypeLeonardo uses an integer first argument and a non-null
+  output pointer second argument. It sends command 6, operation 0 to a driver.
+  The output buffer's complete contract remains unverified.
+- SetControllerTypeLeonardo uses an integer first argument and an integer
+  second argument; the wrapper accepts second-argument values 1 or 2. It sends
+  command 6, operation 1, passing that integer by pointer. Names/meaning of the
+  two values and kernel device restrictions remain unknown. This is an
+  operation on an existing device identifier, not a creation routine.
+- SetVirtualDeviceComponentInformation uses an integer first argument and a
+  non-null pointer second argument, copying 16 bytes before dispatch. The
+  fields' meanings and accepted device classes are unknown.
+
+These observations help narrow an ABI investigation but are not a callable
+SDK contract. Do not call a setter on a physical Nav, substitute the DualSense
+handle, guess component bytes, or infer Access creation from export names.
+Next work is identifying descriptor/class and kernel constraints for a device
+created by our own instance, then validating cleanup before implementing a UI mode.
+
 Access is a distinct device, not merely a DualSense with fewer buttons.
 The ps-access project documents hardware identity 054c:0e5f, USB profile feature
 reports 0x60/0x61, three stored profiles, raw physical button fields, mapped
